@@ -1,5 +1,7 @@
 fileFormatVersion: 2
 guid: 9cf4bdf65bdb40d43b2229a46e3e9c5a
+labels:
+- Character
 DefaultImporter:
   externalObjects: {}
   userData: 
