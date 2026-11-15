@@ -32,8 +32,32 @@ public class PlayerController : MonoBehaviour
         isQuitting = true;
     }
 
-   
 
+    [Header("Pushing")]
+    [SerializeField] private float pushPower = 2.0f;
+
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        Rigidbody body = hit.collider.attachedRigidbody;
+
+        // Check if the object has a rigidbody and is not kinematic
+        if (body == null || body.isKinematic)
+        {
+            return;
+        }
+
+        // Prevent pushing objects that are stacked below the player (e.g., standing on a box)
+        if (hit.moveDirection.y < -0.3f)
+        {
+            return;
+        }
+
+        // Calculate push direction horizontally (ignore vertical slope hits)
+        Vector3 pushDir = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
+
+        // Apply force to the rigidbody based on movement speed and push power
+        body.linearVelocity = pushDir * moveSpeed * (pushPower * 0.5f);
+    }
     void Start()
     {
         controller = GetComponent<CharacterController>();
