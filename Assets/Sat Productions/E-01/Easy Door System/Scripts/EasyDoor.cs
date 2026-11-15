@@ -17,6 +17,14 @@ namespace EasyDoorSystem
         [SerializeField] public bool automaticPlayerDetection = false;
         [SerializeField] private float detectionRange = 3f;
 
+        [Header("Break on Touch")]
+        [SerializeField] private bool destroyOnPlayerTouch;
+        [SerializeField] private GameObject breakEffect;
+        [SerializeField] private int fragmentColumns = 3;
+        [SerializeField] private int fragmentRows = 4;
+        [SerializeField] private float fragmentForce = 4f;
+        [SerializeField] private float fragmentLifetime = 3f;
+
         [Header("Transform Targets")]
         [SerializeField] private Vector3 closedRotation;
         [SerializeField] private Vector3 openedRotation;
@@ -34,10 +42,19 @@ namespace EasyDoorSystem
 
         public bool IsOpen { get; private set; }
         public bool IsMoving { get; private set; }
+        public bool DestroyOnPlayerTouch
+        {
+            get => destroyOnPlayerTouch;
+            set => destroyOnPlayerTouch = value;
+        }
 
         private AudioSource audioSource;
         private Transform playerTransform;
+        private Collider[] playerColliders;
+        private Collider[] doorColliders;
+        private Renderer[] doorRenderers;
         private Coroutine movementCoroutine;
+        private bool hasBroken;
 
         public GameObject Player;
         private void Awake()
@@ -45,19 +62,42 @@ namespace EasyDoorSystem
             audioSource = GetComponent<AudioSource>();
             audioSource.spatialBlend = 1f; // 3D sound by default
             audioSource.playOnAwake = false;
+            doorColliders = GetComponentsInChildren<Collider>();
+            doorRenderers = GetComponentsInChildren<Renderer>();
 
-            if (automaticPlayerDetection)
+            if (automaticPlayerDetection || destroyOnPlayerTouch)
                 FindPlayer();
         }
 
         private void FindPlayer()
         {
-            if (Player) playerTransform = Player.transform;
-            //     Player = GameObject.FindGameObjectWithTag("Player"); playerTransform = Player.transform; // ENABLE FI YOU WANT TO FIND PLAYER WITH TAG
+            if (!Player)
+                Player = GameObject.FindGameObjectWithTag("Player");
+
+            if (!Player)
+            {
+                var controller = FindAnyObjectByType<CharacterController>();
+                if (controller) Player = controller.gameObject;
+            }
+
+            if (Player)
+            {
+                playerTransform = Player.transform;
+                playerColliders = Player.GetComponentsInChildren<Collider>();
+            }
         }
 
         private void Update()
         {
+            if ((automaticPlayerDetection || destroyOnPlayerTouch) && !playerTransform)
+                FindPlayer();
+
+            if (destroyOnPlayerTouch && playerTransform && IsPlayerTouchingDoor())
+            {
+                BreakDoor();
+                return;
+            }
+
             if (!automaticPlayerDetection || !playerTransform) return;
 
             float distance = Vector3.Distance(transform.position, playerTransform.position);
@@ -68,6 +108,92 @@ namespace EasyDoorSystem
             else if (distance > detectionRange && IsOpen)
             {
                 CloseDoor();
+            }
+        }
+
+        private bool IsPlayerTouchingDoor()
+        {
+            if (playerColliders == null) return false;
+
+            foreach (var playerCollider in playerColliders)
+            {
+                if (!playerCollider || !playerCollider.enabled) continue;
+
+                foreach (var doorCollider in doorColliders)
+                {
+                    if (doorCollider && doorCollider.enabled &&
+                        doorCollider.bounds.Intersects(playerCollider.bounds))
+                        return true;
+                }
+
+                foreach (var doorRenderer in doorRenderers)
+                {
+                    if (doorRenderer && doorRenderer.enabled &&
+                        doorRenderer.bounds.Intersects(playerCollider.bounds))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void BreakDoor()
+        {
+            if (hasBroken) return;
+            hasBroken = true;
+
+            if (breakEffect)
+                Instantiate(breakEffect, transform.position, transform.rotation);
+
+            SpawnDoorFragments();
+            Destroy(gameObject);
+        }
+
+        private void SpawnDoorFragments()
+        {
+            var meshFilter = GetComponentInChildren<MeshFilter>();
+            var sourceRenderer = meshFilter
+                ? meshFilter.GetComponent<Renderer>()
+                : GetComponentInChildren<Renderer>();
+            if (!sourceRenderer) return;
+
+            Transform pieceSpace = meshFilter ? meshFilter.transform : sourceRenderer.transform;
+            Bounds bounds = meshFilter && meshFilter.sharedMesh
+                ? meshFilter.sharedMesh.bounds
+                : new Bounds(Vector3.zero, sourceRenderer.bounds.size);
+            int columns = Mathf.Max(1, fragmentColumns);
+            int rows = Mathf.Max(1, fragmentRows);
+            Vector3 pieceSize = new Vector3(
+                bounds.size.x / columns,
+                bounds.size.y / rows,
+                Mathf.Max(bounds.size.z, 0.08f));
+            Vector3 scale = pieceSpace.lossyScale;
+
+            for (int row = 0; row < rows; row++)
+            {
+                for (int column = 0; column < columns; column++)
+                {
+                    Vector3 localPosition = new Vector3(
+                        bounds.min.x + pieceSize.x * (column + 0.5f),
+                        bounds.min.y + pieceSize.y * (row + 0.5f),
+                        bounds.center.z);
+                    var fragment = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    fragment.name = "Door Fragment";
+                    fragment.transform.SetPositionAndRotation(
+                        pieceSpace.TransformPoint(localPosition), pieceSpace.rotation);
+                    fragment.transform.localScale = new Vector3(
+                        pieceSize.x * Mathf.Abs(scale.x),
+                        pieceSize.y * Mathf.Abs(scale.y),
+                        pieceSize.z * Mathf.Abs(scale.z));
+                    fragment.GetComponent<Renderer>().sharedMaterial = sourceRenderer.sharedMaterial;
+
+                    var body = fragment.AddComponent<Rigidbody>();
+                    Vector3 direction = fragment.transform.position - transform.position + Vector3.up * 0.5f;
+                    if (direction.sqrMagnitude > 0.001f)
+                        body.AddForce(direction.normalized * fragmentForce, ForceMode.Impulse);
+                    body.AddTorque(Random.insideUnitSphere * fragmentForce, ForceMode.Impulse);
+                    Destroy(fragment, fragmentLifetime);
+                }
             }
         }
 
