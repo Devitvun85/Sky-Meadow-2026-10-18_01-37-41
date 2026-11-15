@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 842487743251042590}
   - component: {fileID: 4332117280509288123}
   - component: {fileID: 2015979854604184177}
+  - component: {fileID: -7261046062095630837}
   m_Layer: 0
   m_Name: block-grass-large
   m_TagString: Untagged
@@ -93,6 +94,28 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!64 &-7261046062095630837
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 70595858066377636}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 1
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 7173512971136745302, guid: 11f7ef6eea42ad1449f529449fca0619, type: 3}
 --- !u!1 &919132149155446097
 GameObject:
   m_ObjectHideFlags: 0

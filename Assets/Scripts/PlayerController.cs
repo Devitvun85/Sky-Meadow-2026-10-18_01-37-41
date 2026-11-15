@@ -7,10 +7,10 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
-    [SerializeField] private float moveSpeed = 6f;
+    [SerializeField] private float moveSpeed = 4f;
     [SerializeField] private float rotationSpeed = 15f;
-    [SerializeField] private float jumpHeight = 2f;
-    [SerializeField] private float gravity = -9.81f;
+    [SerializeField] private float jumpHeight = 1.5f;
+    [SerializeField] private float gravity = -40f;
 
 
 

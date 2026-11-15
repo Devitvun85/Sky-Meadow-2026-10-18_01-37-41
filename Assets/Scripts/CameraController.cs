@@ -8,9 +8,9 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] private Transform target;     // drag the Player here
 
     [Header("Orbit & Sensitivity")]
-    [SerializeField] private float mouseSensitivity = 3f;
+    [SerializeField] private float mouseSensitivity = 10f;
     [SerializeField] private float fixedPitch = 20f; // Fixed vertical height angle (change this to tilt higher or lower)
-    [SerializeField] private float followSharpness = 15f;
+    [SerializeField] private float followSharpness = 80f;
 
     [Header("Zoom")]
     [SerializeField] private float distance = 10f;
