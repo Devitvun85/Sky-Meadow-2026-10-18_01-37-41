@@ -21,11 +21,11 @@ public class PlayerController : MonoBehaviour
 
 
 
-    [Header("Camera Zoom (Stretch)")]
-    [SerializeField] private float minZoom = 2f;
-    [SerializeField] private float maxZoom = 10f;
-    [SerializeField] private float scrollSensitivity = 5f;
-    private float currentZoomDistance;
+    [Header("Mouse Look")]
+[SerializeField] private float mouseSensitivity = 2f;
+[SerializeField, Range(1f, 89f)] private float maxLookAngle = 85f;
+
+private float cameraPitch;
 
     [Header("Lab wiring (drag your objects here)")]
     [SerializeField] private Transform cameraTransform;
@@ -67,66 +67,130 @@ public class PlayerController : MonoBehaviour
         // Apply force to the rigidbody based on movement speed and push power
         body.linearVelocity = pushDir * moveSpeed * (pushPower * 0.5f);
     }
-    void Start()
+ private void Start()
+{
+    controller = GetComponent<CharacterController>();
+
+    if (cameraTransform == null)
     {
-        controller = GetComponent<CharacterController>();
+        Debug.LogError(
+            "Assign the player's child Camera to Camera Transform.",
+            this
+        );
+
+        enabled = false;
+        return;
     }
 
-    void Update()
+    cameraPitch = 0f;
+    cameraTransform.localRotation = Quaternion.identity;
+
+    SetCursorLocked(true);
+}
+
+private void Update()
+{
+    if (isQuitting || hasFailed)
+        return;
+
+    // Keep your existing falling/failure behavior.
+    if (transform.position.y < fallResetHeight)
     {
-        if (!isQuitting && !hasFailed && transform.position.y < fallResetHeight)
-        {
-            ShowFailureScreen();
-            return;
-        }
-
-        if (hasFailed) return;
-
-        HandleZoom();
-
-        // 1. Get horizontal movement direction from camera
-        float h = Input.GetAxis("Horizontal");
-        float v = Input.GetAxis("Vertical");
-
-        Vector3 camForward = Camera.main.transform.forward;
-        Vector3 camRight = Camera.main.transform.right;
-        camForward.y = 0f;
-        camRight.y = 0f;
-        camForward.Normalize();
-        camRight.Normalize();
-
-        Vector3 moveDir = (camForward * v + camRight * h).normalized;
-
-        // 2. Rotate player to face movement direction (matches where the camera looks)
-        if (moveDir != Vector3.zero)
-        {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDir);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
-        }
-
-        // 3. Handle ground check and jumping
-        if (controller.isGrounded)
-        {
-            if (velocity.y < 0)
-            {
-                velocity.y = -2f;
-            }
-
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-            }
-        }
-        else
-        {
-            velocity.y += gravity * Time.deltaTime;
-        }
-
-        // 4. Combine horizontal speed and vertical velocity into ONE Move call
-        Vector3 finalMove = new Vector3(moveDir.x * moveSpeed, velocity.y, moveDir.z * moveSpeed);
-        controller.Move(finalMove * Time.deltaTime);
-        UpdateMovingPlatformParent();
+        ShowFailureScreen();
+        return;
     }
+
+    // Escape releases the cursor.
+    // Clicking in the Game view captures it again.
+    if (Input.GetKeyDown(KeyCode.Escape))
+    {
+        SetCursorLocked(false);
+    }
+    else if (Cursor.lockState != CursorLockMode.Locked &&
+             Input.GetMouseButtonDown(0))
+    {
+        SetCursorLocked(true);
+    }
+
+    bool canControl = Cursor.lockState == CursorLockMode.Locked;
+
+    if (canControl)
+    {
+        HandleMouseLook();
+    }
+
+    // Movement comes from the keyboard, not the mouse.
+    float horizontal = canControl
+        ? Input.GetAxisRaw("Horizontal")
+        : 0f;
+
+    float vertical = canControl
+        ? Input.GetAxisRaw("Vertical")
+        : 0f;
+
+    // Move relative to the player's facing direction.
+    // A/D strafe instead of turning the player.
+    Vector3 moveDirection =
+        transform.right * horizontal +
+        transform.forward * vertical;
+
+    // Prevent faster diagonal movement.
+    moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
+
+    // Grounding and jumping.
+    if (controller.isGrounded && velocity.y < 0f)
+    {
+        velocity.y = -2f;
+    }
+
+    if (canControl &&
+        controller.isGrounded &&
+        Input.GetKeyDown(KeyCode.Space))
+    {
+        velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+    }
+
+    // Gravity continues even when the cursor is unlocked.
+    velocity.y += gravity * Time.deltaTime;
+
+    Vector3 finalMove =
+        moveDirection * moveSpeed +
+        Vector3.up * velocity.y;
+
+    controller.Move(finalMove * Time.deltaTime);
+
+    // Keep your moving-platform support.
+    UpdateMovingPlatformParent();
+}
+
+private void HandleMouseLook()
+{
+    float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
+    float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+    // Left/right: turn the player.
+    transform.Rotate(0f, mouseX, 0f, Space.World);
+
+    // Up/down: tilt only the camera.
+    cameraPitch -= mouseY;
+    cameraPitch = Mathf.Clamp(
+        cameraPitch,
+        -maxLookAngle,
+        maxLookAngle
+    );
+
+    cameraTransform.localRotation =
+        Quaternion.Euler(cameraPitch, 0f, 0f);
+}
+
+private void SetCursorLocked(bool locked)
+{
+    Cursor.lockState = locked
+        ? CursorLockMode.Locked
+        : CursorLockMode.None;
+
+    Cursor.visible = !locked;
+}
 
     private void OnTriggerEnter(Collider other)
     {
@@ -139,15 +203,7 @@ public class PlayerController : MonoBehaviour
 
     
 
-    private void HandleZoom()
-    {
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        if (scroll != 0f)
-        {
-            currentZoomDistance -= scroll * scrollSensitivity;
-            currentZoomDistance = Mathf.Clamp(currentZoomDistance, minZoom, maxZoom);
-        }
-    }
+
 
     private void UpdateMovingPlatformParent()
     {
