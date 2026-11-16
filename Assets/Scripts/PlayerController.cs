@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 [RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
@@ -47,8 +48,10 @@ public class PlayerController : MonoBehaviour
 
     private Quaternion headRestLocalRotation;
 
+    private bool hasStarted;
     private bool hasFailed;
     private bool isQuitting;
+    private GameObject startScreen;
 
     private void Start()
     {
@@ -105,12 +108,14 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        SetCursorLocked(true);
+        Time.timeScale = 0f;
+        SetCursorLocked(false);
+        CreateStartScreen();
     }
 
     private void Update()
     {
-        if (isQuitting || hasFailed)
+        if (isQuitting || hasFailed || !hasStarted)
         {
             return;
         }
@@ -259,8 +264,76 @@ public class PlayerController : MonoBehaviour
         Cursor.visible = !locked;
     }
 
+    private void CreateStartScreen()
+    {
+        startScreen = CreateOverlayCanvas("Start Screen", 90);
+
+        var panelObject = new GameObject(
+            "Start Panel",
+            typeof(RectTransform),
+            typeof(Image)
+        );
+        panelObject.transform.SetParent(startScreen.transform, false);
+
+        var panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.anchorMin = Vector2.zero;
+        panelRect.anchorMax = Vector2.one;
+        panelRect.offsetMin = Vector2.zero;
+        panelRect.offsetMax = Vector2.zero;
+
+        panelObject.GetComponent<Image>().color =
+            new Color(0.02f, 0.04f, 0.1f, 0.9f);
+
+        CreateLabel(
+            panelObject.transform,
+            "Game Title",
+            "SKY MEADOW",
+            72,
+            new Vector2(0f, 150f),
+            new Vector2(900f, 120f)
+        );
+
+        CreateLabel(
+            panelObject.transform,
+            "Start Instructions",
+            "WASD / ARROWS: MOVE    MOUSE: LOOK    SPACE: JUMP",
+            26,
+            new Vector2(0f, 35f),
+            new Vector2(1100f, 70f)
+        );
+
+        CreateActionButton(
+            panelObject.transform,
+            "Start Button",
+            "START",
+            new Vector2(0f, -100f),
+            StartGame
+        );
+
+        EnsureEventSystem();
+    }
+
+    private void StartGame()
+    {
+        if (hasStarted)
+        {
+            return;
+        }
+
+        hasStarted = true;
+        Time.timeScale = 1f;
+        Destroy(startScreen);
+        SetCursorLocked(true);
+    }
+
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
+        if (hit.collider.GetComponentInParent<returnBarrel>() != null)
+        {
+            ShowFailureScreen();
+            return;
+        }
+
         Rigidbody body = hit.collider.attachedRigidbody;
 
         if (body == null || body.isKinematic)
@@ -342,22 +415,7 @@ public class PlayerController : MonoBehaviour
         SetCursorLocked(false);
 
         // Canvas.
-        var canvasObject = new GameObject(
-            "Failure Screen",
-            typeof(RectTransform),
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster)
-        );
-
-        var canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 100;
-
-        var scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode =
-            CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        var canvasObject = CreateOverlayCanvas("Failure Screen", 100);
 
         // Background.
         var panelObject = new GameObject(
@@ -388,19 +446,58 @@ public class PlayerController : MonoBehaviour
         );
 
         // Restart button.
-        var buttonObject = new GameObject(
+        CreateActionButton(
+            panelObject.transform,
             "Play Again Button",
+            "PLAY AGAIN",
+            new Vector2(0f, -40f),
+            RestartLevel
+        );
+
+        EnsureEventSystem();
+    }
+
+    private GameObject CreateOverlayCanvas(string objectName, int sortingOrder)
+    {
+        var canvasObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(Canvas),
+            typeof(CanvasScaler),
+            typeof(GraphicRaycaster)
+        );
+
+        var canvas = canvasObject.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = sortingOrder;
+
+        var scaler = canvasObject.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
+
+        return canvasObject;
+    }
+
+    private void CreateActionButton(
+        Transform parent,
+        string objectName,
+        string label,
+        Vector2 position,
+        UnityAction onClick)
+    {
+        var buttonObject = new GameObject(
+            objectName,
             typeof(RectTransform),
             typeof(Image),
             typeof(Button)
         );
-
-        buttonObject.transform.SetParent(panelObject.transform, false);
+        buttonObject.transform.SetParent(parent, false);
 
         var buttonRect = buttonObject.GetComponent<RectTransform>();
         buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
         buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
-        buttonRect.anchoredPosition = new Vector2(0f, -40f);
+        buttonRect.anchoredPosition = position;
         buttonRect.sizeDelta = new Vector2(320f, 90f);
 
         var buttonImage = buttonObject.GetComponent<Image>();
@@ -408,30 +505,33 @@ public class PlayerController : MonoBehaviour
 
         var button = buttonObject.GetComponent<Button>();
         button.targetGraphic = buttonImage;
-        button.onClick.AddListener(RestartLevel);
+        button.onClick.AddListener(onClick);
 
         CreateLabel(
             buttonObject.transform,
             "Label",
-            "PLAY AGAIN",
+            label,
             36,
             Vector2.zero,
             new Vector2(320f, 90f)
         );
+    }
 
-        // UI input.
-        if (EventSystem.current == null)
+    private void EnsureEventSystem()
+    {
+        if (EventSystem.current != null)
         {
-            var eventSystemObject = new GameObject(
-                "EventSystem",
-                typeof(EventSystem)
-            );
-
-            var inputModule =
-                eventSystemObject.AddComponent<InputSystemUIInputModule>();
-
-            inputModule.AssignDefaultActions();
+            return;
         }
+
+        var eventSystemObject = new GameObject(
+            "EventSystem",
+            typeof(EventSystem)
+        );
+
+        var inputModule =
+            eventSystemObject.AddComponent<InputSystemUIInputModule>();
+        inputModule.AssignDefaultActions();
     }
 
     private void CreateLabel(
@@ -469,6 +569,7 @@ public class PlayerController : MonoBehaviour
 
     private void RestartLevel()
     {
+        Time.timeScale = 1f;
         SceneManager.LoadScene(
             SceneManager.GetActiveScene().buildIndex
         );
@@ -482,5 +583,6 @@ public class PlayerController : MonoBehaviour
     private void OnApplicationQuit()
     {
         isQuitting = true;
+        Time.timeScale = 1f;
     }
 }
