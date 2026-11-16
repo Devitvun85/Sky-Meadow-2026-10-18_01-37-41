@@ -10,15 +10,23 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
-    [SerializeField] private float turnSpeed = 360f;
+    [SerializeField] private float turnSpeed = 120f;
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -40f;
 
-    [Header("Camera - drag the player's child Camera here (optional)")]
+    [Header("Mouse Look")]
+    [SerializeField] private float mouseSensitivity = 2f;
+
+    [SerializeField, Range(1f, 89f)]
+    private float maxLookAngle = 80f;
+
+    [Header("Camera")]
+    [Tooltip("Main Camera must be directly inside Player.")]
     [SerializeField] private Transform cameraTransform;
 
-    [Header("Coins")]
-    [SerializeField] private int totalCoins = 5;
+    [Header("Visible Head - Optional")]
+    [Tooltip("Assign a real head bone, NOT Player or body-mesh.")]
+    [SerializeField] private Transform headBone;
 
     [Header("Pushing")]
     [SerializeField] private float pushPower = 2f;
@@ -29,29 +37,71 @@ public class PlayerController : MonoBehaviour
     private CharacterController controller;
     private MovingPlatformRL currentPlatform;
 
-    private Vector3 velocity;
-    private int coinsCollected;
-    private Text coinScoreText;
+    private Vector3 horizontalVelocity;
+    private float verticalVelocity;
+    private float cameraPitch;
 
-    private bool isQuitting;
+    private Quaternion headRestLocalRotation;
+
     private bool hasFailed;
+    private bool isQuitting;
 
     private void Start()
     {
         controller = GetComponent<CharacterController>();
 
-        // Keep the camera looking straight ahead with the player.
-        if (cameraTransform != null)
+        // Automatically find a Camera inside Player.
+        if (cameraTransform == null)
         {
-            cameraTransform.localRotation = Quaternion.identity;
+            Camera childCamera = GetComponentInChildren<Camera>(true);
+
+            if (childCamera != null)
+            {
+                cameraTransform = childCamera.transform;
+            }
         }
 
-        // Keep the cursor free since mouse is not used to look.
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        // This controller uses a Camera directly parented to Player.
+        if (cameraTransform == null ||
+            cameraTransform.parent != transform ||
+            cameraTransform.GetComponent<Camera>() == null)
+        {
+            Debug.LogError(
+                "PlayerController: Put Main Camera directly under " +
+                "Player and assign it to Camera Transform.",
+                this
+            );
 
-        CreateCoinScoreUI();
-        UpdateCoinScoreUI();
+            enabled = false;
+            return;
+        }
+
+        cameraPitch = 0f;
+        cameraTransform.localRotation = Quaternion.identity;
+        cameraTransform.localScale = Vector3.one;
+
+        // The optional head must belong to the player's skeleton.
+        if (headBone != null)
+        {
+            if (headBone == transform ||
+                headBone == cameraTransform ||
+                !headBone.IsChildOf(transform))
+            {
+                Debug.LogWarning(
+                    "Head Bone must be a head bone inside Player. " +
+                    "The optional head movement has been disabled.",
+                    this
+                );
+
+                headBone = null;
+            }
+            else
+            {
+                headRestLocalRotation = headBone.localRotation;
+            }
+        }
+
+        SetCursorLocked(true);
     }
 
     private void Update()
@@ -61,133 +111,160 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        // Show the failure screen when the player falls too far.
         if (transform.position.y < fallResetHeight)
         {
             ShowFailureScreen();
             return;
         }
 
-        // A/D or Left/Right turns the player left and right.
-        float horizontal = Input.GetAxisRaw("Horizontal");
-
-        // W/S or Up/Down moves forward and backward.
-        float vertical = Input.GetAxisRaw("Vertical");
-
-        // Rotate the player (the child camera rotates with it).
-        if (horizontal != 0f)
+        // Escape releases the cursor.
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            transform.Rotate(0f, horizontal * turnSpeed * Time.deltaTime, 0f);
+            SetCursorLocked(false);
+        }
+        // Click the Game view to capture the cursor again.
+        else if (Cursor.lockState != CursorLockMode.Locked &&
+                 Input.GetMouseButtonDown(0))
+        {
+            SetCursorLocked(true);
         }
 
-        // Move forward or backward in the direction the player is facing.
-        Vector3 moveDirection = transform.forward * vertical;
+        bool canControl =
+            Cursor.lockState == CursorLockMode.Locked;
 
-        // Keep the player grounded.
-        if (controller.isGrounded && velocity.y < 0f)
+        if (canControl)
         {
-            velocity.y = -2f;
+            HandleMouseLook();
         }
 
-        // Jump.
-        if (controller.isGrounded && Input.GetKeyDown(KeyCode.Space))
-        {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-        }
-
-        velocity.y += gravity * Time.deltaTime;
-
-        Vector3 finalMove =
-            moveDirection * moveSpeed +
-            Vector3.up * velocity.y;
-
-        controller.Move(finalMove * Time.deltaTime);
-
+        HandleMovement(canControl);
         UpdateMovingPlatformParent();
     }
 
-    public void CollectCoin()
+    private void HandleMouseLook()
     {
-        coinsCollected++;
-        UpdateCoinScoreUI();
+        float mouseX =
+            Input.GetAxis("Mouse X") * mouseSensitivity;
+
+        float mouseY =
+            Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+        // Horizontal mouse movement turns Player and its visible body.
+        transform.Rotate(0f, mouseX, 0f, Space.World);
+
+        // Vertical mouse movement tilts the Camera, not the whole body.
+        cameraPitch -= mouseY;
+        cameraPitch = Mathf.Clamp(
+            cameraPitch,
+            -maxLookAngle,
+            maxLookAngle
+        );
+
+        cameraTransform.localRotation =
+            Quaternion.Euler(cameraPitch, 0f, 0f);
     }
 
-    private void CreateCoinScoreUI()
+    private void HandleMovement(bool canControl)
     {
-        var canvasObject = new GameObject(
-            "Coin Score HUD",
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster)
-        );
+        Vector2 input = Vector2.zero;
 
-        var canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 50;
-
-        var scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-
-        var bgObject = new GameObject(
-            "Score Background",
-            typeof(RectTransform),
-            typeof(Image)
-        );
-        bgObject.transform.SetParent(canvasObject.transform, false);
-
-        var bgRect = bgObject.GetComponent<RectTransform>();
-        bgRect.anchorMin = new Vector2(0.5f, 1f);
-        bgRect.anchorMax = new Vector2(0.5f, 1f);
-        bgRect.pivot = new Vector2(0.5f, 1f);
-        bgRect.anchoredPosition = new Vector2(0f, -25f);
-        bgRect.sizeDelta = new Vector2(280f, 70f);
-
-        var bgImage = bgObject.GetComponent<Image>();
-        bgImage.color = new Color(0f, 0f, 0f, 0.55f);
-        bgImage.raycastTarget = false;
-
-        var textObject = new GameObject(
-            "Score Text",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-        textObject.transform.SetParent(bgObject.transform, false);
-
-        var textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        coinScoreText = textObject.GetComponent<Text>();
-        coinScoreText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        coinScoreText.fontSize = 36;
-        coinScoreText.fontStyle = FontStyle.Bold;
-        coinScoreText.alignment = TextAnchor.MiddleCenter;
-        coinScoreText.color = Color.white;
-        coinScoreText.raycastTarget = false;
-    }
-
-    private void UpdateCoinScoreUI()
-    {
-        if (coinScoreText != null)
+        if (canControl)
         {
-            coinScoreText.text = $"Coins: {coinsCollected}/{totalCoins}";
+            input = new Vector2(
+                Input.GetAxisRaw("Horizontal"),
+                Input.GetAxisRaw("Vertical")
+            );
         }
+
+        // Prevent faster diagonal movement.
+        input = Vector2.ClampMagnitude(input, 1f);
+
+        // Move along the ground in the direction Player is facing.
+        // Looking up does not make the player fly upwards.
+        Vector3 forward = Vector3.ProjectOnPlane(
+            transform.forward,
+            Vector3.up
+        ).normalized;
+
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+
+        Vector3 targetVelocity =
+            (forward * input.y + right * input.x) * moveSpeed;
+
+        // Smooth acceleration and stopping.
+        if (canControl)
+        {
+            horizontalVelocity = Vector3.MoveTowards(
+                horizontalVelocity,
+                targetVelocity,
+                acceleration * Time.deltaTime
+            );
+        }
+        else
+        {
+            horizontalVelocity = Vector3.zero;
+        }
+
+        if (controller.isGrounded && verticalVelocity < 0f)
+        {
+            verticalVelocity = -2f;
+        }
+
+        if (canControl &&
+            controller.isGrounded &&
+            Input.GetKeyDown(KeyCode.Space))
+        {
+            verticalVelocity =
+                Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
+
+        verticalVelocity += gravity * Time.deltaTime;
+
+        Vector3 movement =
+            horizontalVelocity + Vector3.up * verticalVelocity;
+
+        controller.Move(movement * Time.deltaTime);
+    }
+
+    private void LateUpdate()
+    {
+        if (headBone == null || hasFailed || isQuitting)
+        {
+            return;
+        }
+
+        // Player rotation already turns the head left/right.
+        // Add the up/down look to the visible head.
+        //
+        // Using Player's right axis avoids assuming that the
+        // imported head bone's own X-axis points sideways.
+        Quaternion restWorldRotation =
+            headBone.parent.rotation * headRestLocalRotation;
+
+        headBone.rotation =
+            Quaternion.AngleAxis(cameraPitch, transform.right) *
+            restWorldRotation;
+    }
+
+    private void SetCursorLocked(bool locked)
+    {
+        Cursor.lockState = locked
+            ? CursorLockMode.Locked
+            : CursorLockMode.None;
+
+        Cursor.visible = !locked;
     }
 
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
         Rigidbody body = hit.collider.attachedRigidbody;
 
-        // Only push non-kinematic rigidbodies.
         if (body == null || body.isKinematic)
         {
             return;
         }
 
-        // Do not push objects underneath the player.
+        // Do not push objects underneath the Player.
         if (hit.moveDirection.y < -0.3f)
         {
             return;
@@ -199,15 +276,14 @@ public class PlayerController : MonoBehaviour
             hit.moveDirection.z
         );
 
-        Vector3 pushVelocity =
-            pushDirection * moveSpeed * (pushPower * 0.5f);
+        float pushSpeed = moveSpeed * (pushPower * 0.5f);
 
-        // Support Unity 6 and earlier Unity versions.
-#if UNITY_6000_0_OR_NEWER
-        body.linearVelocity = pushVelocity;
-#else
-        body.velocity = pushVelocity;
-#endif
+        // Preserve vertical velocity so pushed objects still fall.
+        Vector3 bodyVelocity = body.linearVelocity;
+        bodyVelocity.x = pushDirection.x * pushSpeed;
+        bodyVelocity.z = pushDirection.z * pushSpeed;
+
+        body.linearVelocity = bodyVelocity;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -259,13 +335,12 @@ public class PlayerController : MonoBehaviour
 
         hasFailed = true;
         controller.enabled = false;
+        SetCursorLocked(false);
 
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-
-        // Create the canvas.
+        // Canvas.
         var canvasObject = new GameObject(
             "Failure Screen",
+            typeof(RectTransform),
             typeof(Canvas),
             typeof(CanvasScaler),
             typeof(GraphicRaycaster)
@@ -280,17 +355,14 @@ public class PlayerController : MonoBehaviour
             CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920f, 1080f);
 
-        // Create the background panel.
+        // Background.
         var panelObject = new GameObject(
             "Failure Panel",
             typeof(RectTransform),
             typeof(Image)
         );
 
-        panelObject.transform.SetParent(
-            canvasObject.transform,
-            false
-        );
+        panelObject.transform.SetParent(canvasObject.transform, false);
 
         var panelRect = panelObject.GetComponent<RectTransform>();
         panelRect.anchorMin = Vector2.zero;
@@ -301,35 +373,17 @@ public class PlayerController : MonoBehaviour
         panelObject.GetComponent<Image>().color =
             new Color(0f, 0f, 0f, 0.7f);
 
-        // Create the failure message.
-        var titleObject = new GameObject(
-            "Failure Message",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-
-        titleObject.transform.SetParent(
+        // Title.
+        CreateLabel(
             panelObject.transform,
-            false
+            "Failure Message",
+            "YOU FAILED",
+            64,
+            new Vector2(0f, 100f),
+            new Vector2(800f, 120f)
         );
 
-        var titleRect = titleObject.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.5f, 0.5f);
-        titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.anchoredPosition = new Vector2(0f, 100f);
-        titleRect.sizeDelta = new Vector2(800f, 120f);
-
-        var title = titleObject.GetComponent<Text>();
-        title.font =
-            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        title.text = "YOU FAILED";
-        title.fontSize = 64;
-        title.fontStyle = FontStyle.Bold;
-        title.alignment = TextAnchor.MiddleCenter;
-        title.color = Color.white;
-        title.raycastTarget = false;
-
-        // Create the restart button.
+        // Restart button.
         var buttonObject = new GameObject(
             "Play Again Button",
             typeof(RectTransform),
@@ -337,14 +391,9 @@ public class PlayerController : MonoBehaviour
             typeof(Button)
         );
 
-        buttonObject.transform.SetParent(
-            panelObject.transform,
-            false
-        );
+        buttonObject.transform.SetParent(panelObject.transform, false);
 
-        var buttonRect =
-            buttonObject.GetComponent<RectTransform>();
-
+        var buttonRect = buttonObject.GetComponent<RectTransform>();
         buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
         buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
         buttonRect.anchoredPosition = new Vector2(0f, -40f);
@@ -355,44 +404,18 @@ public class PlayerController : MonoBehaviour
 
         var button = buttonObject.GetComponent<Button>();
         button.targetGraphic = buttonImage;
+        button.onClick.AddListener(RestartLevel);
 
-        button.onClick.AddListener(() =>
-        {
-            SceneManager.LoadScene(
-                SceneManager.GetActiveScene().buildIndex
-            );
-        });
-
-        // Create the button label.
-        var buttonLabelObject = new GameObject(
-            "Label",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-
-        buttonLabelObject.transform.SetParent(
+        CreateLabel(
             buttonObject.transform,
-            false
+            "Label",
+            "PLAY AGAIN",
+            36,
+            Vector2.zero,
+            new Vector2(320f, 90f)
         );
 
-        var labelRect =
-            buttonLabelObject.GetComponent<RectTransform>();
-
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
-
-        var label = buttonLabelObject.GetComponent<Text>();
-        label.font = title.font;
-        label.text = "PLAY AGAIN";
-        label.fontSize = 36;
-        label.fontStyle = FontStyle.Bold;
-        label.alignment = TextAnchor.MiddleCenter;
-        label.color = Color.white;
-        label.raycastTarget = false;
-
-        // Create an EventSystem if the scene does not have one.
+        // UI input.
         if (EventSystem.current == null)
         {
             var eventSystemObject = new GameObject(
@@ -405,6 +428,51 @@ public class PlayerController : MonoBehaviour
 
             inputModule.AssignDefaultActions();
         }
+    }
+
+    private void CreateLabel(
+        Transform parent,
+        string objectName,
+        string content,
+        int fontSize,
+        Vector2 position,
+        Vector2 size)
+    {
+        var labelObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(Text)
+        );
+
+        labelObject.transform.SetParent(parent, false);
+
+        var rect = labelObject.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+
+        var label = labelObject.GetComponent<Text>();
+        label.font =
+            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        label.text = content;
+        label.fontSize = fontSize;
+        label.fontStyle = FontStyle.Bold;
+        label.alignment = TextAnchor.MiddleCenter;
+        label.color = Color.white;
+        label.raycastTarget = false;
+    }
+
+    private void RestartLevel()
+    {
+        SceneManager.LoadScene(
+            SceneManager.GetActiveScene().buildIndex
+        );
+    }
+
+    private void OnDisable()
+    {
+        SetCursorLocked(false);
     }
 
     private void OnApplicationQuit()
