@@ -1,121 +1,128 @@
-# Sky Meadow - Game Instructions
+# Sky Meadow
 
-## What is Sky Meadow?
+Sky Meadow is a 3D platforming obstacle-course game made in Unity. The player
+must cross floating platforms, avoid falling, pass through doors, and collect
+the golden coins placed throughout the level.
 
-Sky Meadow is a short 3D platforming obstacle course. Guide the player across
-the floating platforms, pass the doors, and collect the golden coins placed
-around the level.
+## Game Goal
 
-The current playable scene is `Assets/Project/Scenes/Section1.unity`.
+Complete the `Section1` course while collecting all five golden coins. The HUD
+shows progress as `Coins: collected/5`.
 
-## Main Objective
+The current scene does not contain a scripted finish trigger or victory screen.
+For this version, completing the course and collecting all five coins is the
+practical completion goal.
 
-1. Start the level.
-2. Cross the platform course without falling.
-3. Collect all five golden coins. The counter at the top of the screen shows
-   progress as `Coins: collected/5`.
-4. Reach and explore the end of the course.
+## Rules and Gameplay
 
-The current `Section1` scene does not contain a scripted finish trigger or
-victory screen. Completing the course and collecting all five coins is
-therefore the practical completion goal for this version.
+1. Stay on the platforms and avoid falling below the level.
+2. Use jumps to cross gaps and reach higher platforms.
+3. Moving platforms travel from side to side. Wait for a safe landing before
+   jumping off.
+4. Walk into a golden coin to collect it. Each coin can only be collected once.
+5. Some doors open automatically when the player approaches. Another door is
+   configured to break when touched.
+6. Falling displays **YOU FAILED** and stops player control.
+7. Select **PLAY AGAIN** after failure to reload the level.
 
 ## Controls
 
-| Action | Keyboard / mouse |
-|---|---|
-| Move forward | `W` or `Up Arrow` |
-| Move backward | `S` or `Down Arrow` |
-| Move left | `A` or `Left Arrow` |
-| Move right | `D` or `Right Arrow` |
-| Look / turn | Move the mouse |
-| Jump | `Space` |
-| Release the mouse cursor | `Escape` |
-| Capture the mouse cursor again | Click inside the Game view |
+| Action                   | Keyboard / mouse           |
+| ------------------------ | -------------------------- |
+| Move forward             | `W` or `Up Arrow`          |
+| Move backward            | `S` or `Down Arrow`        |
+| Move left                | `A` or `Left Arrow`        |
+| Move right               | `D` or `Right Arrow`       |
+| Look and turn            | Move the mouse             |
+| Jump                     | `Space`                    |
+| Release the mouse cursor | `Escape`                   |
+| Capture the cursor again | Click inside the Game view |
 
-Movement follows the direction the player is facing. Mouse movement turns the
-player horizontally and looks up or down.
-
-## Starting the Game
-
-When the level starts, the game is paused on the start screen.
-
-1. Click **START**.
-2. The mouse cursor is captured by the Game view.
-3. Use `WASD` or the arrow keys to move and the mouse to look around.
-
-If the mouse is released with `Escape`, click the Game view before trying to
-move or look again.
+Movement follows the direction the player is facing. The `E` key is not
+required for the doors configured in the current playable scene.
 
 ## Screenshots
 
 ### Start Screen
 
-The start screen displays the game title, the basic controls, and the **START**
-button.
-
 ![Sky Meadow start screen](Assets/Project/view/start.png)
 
 ### Platform Course
 
-The main course contains floating platforms, moving platforms, doors, trees,
-and golden coins. The coin counter is shown at the top of the screen.
-
 ![Sky Meadow platform course](Assets/Project/view/latform.png)
 
-## How to Play
+## Unity Version and Technologies
 
-### Crossing platforms
+- **Unity:** `6000.3.8f1`
+- **Render pipeline:** Universal Render Pipeline
+- **Input package:** Unity Input System `1.20.0`
+- **Playable scene:** `Assets/Project/Scenes/Section1.unity`
 
-- Watch the gaps between platforms before moving.
-- Use `Space` to jump across small gaps or onto higher platforms.
-- Moving platforms travel from side to side. Step onto one and wait for a
-  safe alignment before jumping off.
-- Do not stand too close to an edge while looking around; the player moves
-  relative to the direction they are facing.
+## Setup and Running
 
-### Collecting coins
+### Requirements
 
-Walk into a spinning golden coin to collect it. A collected coin disappears and
-the counter increases by one. Each coin can only be collected once.
+- Unity Hub
+- Unity `6000.3.8f1`
+- A computer capable of running Unity
 
-### Doors
+### Run in the Unity Editor
 
-Some doors open automatically when the player gets close. Another door is
-configured to break when the player touches it. In the current `Section1`
-scene, the `E` key is not required for the configured doors.
+1. Clone or download this repository.
+2. Open the project folder in Unity Hub.
+3. Select Unity `6000.3.8f1` if Unity asks for an editor version.
+4. Open `Assets/Project/Scenes/Section1.unity`.
+5. Press the **Play** button.
+6. Click **START**, then use the controls above.
 
-### Falling and failure
+### Build a standalone version
 
-If the player falls below the level, the game shows **YOU FAILED** and stops
-player control. Click **PLAY AGAIN** to reload the level from the beginning.
+1. Open the project in Unity.
+2. Open **File > Build Profiles**. In older Unity layouts, use
+   **File > Build Settings**.
+3. Confirm that `Assets/Project/Scenes/Section1.unity` is included.
+4. Select the target platform.
+5. Choose **Build** or **Build and Run**.
 
-## HUD and Feedback
+The scene is already included in
+[EditorBuildSettings.asset](ProjectSettings/EditorBuildSettings.asset).
 
-- **Coins:** Shows the number of collected coins out of five.
-- **Start screen:** Appears before the level begins.
-- **YOU FAILED:** Appears after falling from the course.
-- **PLAY AGAIN:** Reloads the active level.
+## Project Structure
 
-The project also contains timer code, but the current `Section1` scene does not
-use a timer as a required objective.
+| Path                                   | Purpose                                              |
+| -------------------------------------- | ---------------------------------------------------- |
+| `Assets/Project/Scenes/Section1.unity` | Main playable level                                  |
+| `Assets/Scripts/`                      | Player, coin, platform, camera, and gameplay scripts |
+| `Assets/Sat Productions/`              | Easy Door System assets and scripts                  |
+| `Assets/kenney_platformer-kit/`        | Platformer environment assets                        |
+| `ProjectSettings/`                     | Unity project and build configuration                |
+| `GAME_INSTRUCTIONS.md`                 | Detailed player instructions                         |
 
-## How to Run the Game in Unity
+## Current Limitations
 
-1. Open the `Sky Meadow` project in Unity.
-2. Open `Assets/Project/Scenes/Section1.unity`.
-3. Press the **Play** button in the Unity Editor.
-4. Press **START** and play using the controls above.
+- There is no scripted victory trigger or win screen yet.
+- The timer script exists, but it is not required by the current playable scene.
+- A standalone build and gameplay video must be created separately before
+  submission.
 
-`Section1.unity` is also the scene listed in the project's build settings. To
-make a standalone version, use **File > Build Profiles** (or **File > Build
-Settings**, depending on the Unity version), ensure `Section1` is included,
-choose the target platform, and select **Build** or **Build and Run**.
+## Team Contributions
 
-## Tips
+The current Git history shows the following contributions:
 
-- Look ahead and plan your route before jumping.
-- Use the moving platforms instead of trying to clear every gap directly.
-- Collect coins while moving through the level, but prioritize landing safely.
-- If the cursor seems stuck, press `Escape`, then click the Game view to
-  continue.
+| Member     | Contribution                                                      |
+| ---------- | ----------------------------------------------------------------- |
+| Devitvun85 | Gameplay integration, scene setup, documentation, and screenshots |
+| John       | Barrel-roll mechanic                                              |
+
+If additional team members contributed, add their names and specific work to
+this table before submission.
+
+## Credits
+
+- **Unity Technologies** - Unity Editor, runtime, Universal Render Pipeline,
+  Input System, and TextMesh Pro.
+- **Kenney** - platformer environment assets in
+  `Assets/kenney_platformer-kit/`. See
+  [`License.txt`](Assets/kenney_platformer-kit/License.txt).
+- **Sat Productions** - Easy Door System assets in
+  `Assets/Sat Productions/E-01/Easy Door System/`.
