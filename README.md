@@ -9,9 +9,6 @@ the golden coins placed throughout the level.
 Complete the `Section1` course while collecting all five golden coins. The HUD
 shows progress as `Coins: collected/5`.
 
-The current scene does not contain a scripted finish trigger or victory screen.
-For this version, completing the course and collecting all five coins is the
-practical completion goal.
 
 ## Rules and Gameplay
 
@@ -75,18 +72,6 @@ required for the doors configured in the current playable scene.
 5. Press the **Play** button.
 6. Click **START**, then use the controls above.
 
-### Build a standalone version
-
-1. Open the project in Unity.
-2. Open **File > Build Profiles**. In older Unity layouts, use
-   **File > Build Settings**.
-3. Confirm that `Assets/Project/Scenes/Section1.unity` is included.
-4. Select the target platform.
-5. Choose **Build** or **Build and Run**.
-
-The scene is already included in
-[EditorBuildSettings.asset](ProjectSettings/EditorBuildSettings.asset).
-
 ## Project Structure
 
 | Path                                   | Purpose                                              |
@@ -98,12 +83,6 @@ The scene is already included in
 | `ProjectSettings/`                     | Unity project and build configuration                |
 | `GAME_INSTRUCTIONS.md`                 | Detailed player instructions                         |
 
-## Current Limitations
-
-- There is no scripted victory trigger or win screen yet.
-- The timer script exists, but it is not required by the current playable scene.
-- A standalone build and gameplay video must be created separately before
-  submission.
 
 ## Team Contributions
 
@@ -114,8 +93,13 @@ The current Git history shows the following contributions:
 | Devitvun85 | Scene setup, documentation, set coin doors and screenshots |
 | John       | Barrel-roll mechanic                                              |
 
-If additional team members contributed, add their names and specific work to
-this table before submission.
+## Submission Links
+
+| Submission item | Link |
+|---|---|
+| Source repository | [Sky Meadow on GitHub](https://github.com/Devitvun85/Sky-Meadow-2026-10-18_01-37-41) |
+| Gameplay video | [YouTube Video](https://youtu.be/QaZv5KhQVns) |
+| Course submission form | [Microsoft Form](https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=7GGUHmJTKUOuRmH6PpHG0krixqZ-5JBLgDU3_E9cNpdUQ0ZCU0hTSzJQVlNUSkwyREZYRktDTE5SSy4u)|
 
 ## Credits
 
