@@ -10,15 +10,16 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
-    [SerializeField] private float turnSpeed = 120f;
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -40f;
 
-    [Header("Camera - drag the player's child Camera here (optional)")]
-    [SerializeField] private Transform cameraTransform;
+    [Header("Mouse Look")]
+    [SerializeField] private float mouseSensitivity = 2f;
+    [SerializeField, Range(1f, 89f)]
+    private float maxLookAngle = 85f;
 
-    [Header("Coins")]
-    [SerializeField] private int totalCoins = 5;
+    [Header("Camera - drag the player's child Camera here")]
+    [SerializeField] private Transform cameraTransform;
 
     [Header("Pushing")]
     [SerializeField] private float pushPower = 2f;
@@ -30,8 +31,7 @@ public class PlayerController : MonoBehaviour
     private MovingPlatformRL currentPlatform;
 
     private Vector3 velocity;
-    private int coinsCollected;
-    private Text coinScoreText;
+    private float cameraPitch;
 
     private bool isQuitting;
     private bool hasFailed;
@@ -40,18 +40,22 @@ public class PlayerController : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
 
-        // Keep the camera looking straight ahead with the player.
-        if (cameraTransform != null)
+        if (cameraTransform == null)
         {
-            cameraTransform.localRotation = Quaternion.identity;
+            Debug.LogError(
+                "PlayerController: Assign the player's child Camera " +
+                "to the Camera Transform field.",
+                this
+            );
+
+            enabled = false;
+            return;
         }
 
-        // Keep the cursor free since mouse is not used to look.
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        cameraPitch = 0f;
+        cameraTransform.localRotation = Quaternion.identity;
 
-        CreateCoinScoreUI();
-        UpdateCoinScoreUI();
+        SetCursorLocked(true);
     }
 
     private void Update()
@@ -68,20 +72,43 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        // A/D or Left/Right turns the player left and right.
-        float horizontal = Input.GetAxisRaw("Horizontal");
-
-        // W/S or Up/Down moves forward and backward.
-        float vertical = Input.GetAxisRaw("Vertical");
-
-        // Rotate the player (the child camera rotates with it).
-        if (horizontal != 0f)
+        // Escape releases the cursor.
+        // Clicking the Game view captures it again.
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            transform.Rotate(0f, horizontal * turnSpeed * Time.deltaTime, 0f);
+            SetCursorLocked(false);
+        }
+        else if (Cursor.lockState != CursorLockMode.Locked &&
+                 Input.GetMouseButtonDown(0))
+        {
+            SetCursorLocked(true);
         }
 
-        // Move forward or backward in the direction the player is facing.
-        Vector3 moveDirection = transform.forward * vertical;
+        bool canControl =
+            Cursor.lockState == CursorLockMode.Locked;
+
+        if (canControl)
+        {
+            HandleMouseLook();
+        }
+
+        // Keyboard movement.
+        float horizontal = canControl
+            ? Input.GetAxisRaw("Horizontal")
+            : 0f;
+
+        float vertical = canControl
+            ? Input.GetAxisRaw("Vertical")
+            : 0f;
+
+        // Move relative to the direction the player is facing.
+        // A/D move sideways instead of turning the character.
+        Vector3 moveDirection =
+            transform.right * horizontal +
+            transform.forward * vertical;
+
+        // Prevent diagonal movement from being faster.
+        moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
 
         // Keep the player grounded.
         if (controller.isGrounded && velocity.y < 0f)
@@ -90,11 +117,14 @@ public class PlayerController : MonoBehaviour
         }
 
         // Jump.
-        if (controller.isGrounded && Input.GetKeyDown(KeyCode.Space))
+        if (canControl &&
+            controller.isGrounded &&
+            Input.GetKeyDown(KeyCode.Space))
         {
             velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
 
+        // Gravity continues even when the cursor is released.
         velocity.y += gravity * Time.deltaTime;
 
         Vector3 finalMove =
@@ -106,75 +136,37 @@ public class PlayerController : MonoBehaviour
         UpdateMovingPlatformParent();
     }
 
-    public void CollectCoin()
+    private void HandleMouseLook()
     {
-        coinsCollected++;
-        UpdateCoinScoreUI();
+        float mouseX =
+            Input.GetAxis("Mouse X") * mouseSensitivity;
+
+        float mouseY =
+            Input.GetAxis("Mouse Y") * mouseSensitivity;
+
+        // Look left/right by rotating the player.
+        transform.Rotate(0f, mouseX, 0f, Space.World);
+
+        // Look up/down by rotating only the camera.
+        cameraPitch -= mouseY;
+
+        cameraPitch = Mathf.Clamp(
+            cameraPitch,
+            -maxLookAngle,
+            maxLookAngle
+        );
+
+        cameraTransform.localRotation =
+            Quaternion.Euler(cameraPitch, 0f, 0f);
     }
 
-    private void CreateCoinScoreUI()
+    private void SetCursorLocked(bool locked)
     {
-        var canvasObject = new GameObject(
-            "Coin Score HUD",
-            typeof(Canvas),
-            typeof(CanvasScaler),
-            typeof(GraphicRaycaster)
-        );
+        Cursor.lockState = locked
+            ? CursorLockMode.Locked
+            : CursorLockMode.None;
 
-        var canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 50;
-
-        var scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-
-        var bgObject = new GameObject(
-            "Score Background",
-            typeof(RectTransform),
-            typeof(Image)
-        );
-        bgObject.transform.SetParent(canvasObject.transform, false);
-
-        var bgRect = bgObject.GetComponent<RectTransform>();
-        bgRect.anchorMin = new Vector2(0.5f, 1f);
-        bgRect.anchorMax = new Vector2(0.5f, 1f);
-        bgRect.pivot = new Vector2(0.5f, 1f);
-        bgRect.anchoredPosition = new Vector2(0f, -25f);
-        bgRect.sizeDelta = new Vector2(280f, 70f);
-
-        var bgImage = bgObject.GetComponent<Image>();
-        bgImage.color = new Color(0f, 0f, 0f, 0.55f);
-        bgImage.raycastTarget = false;
-
-        var textObject = new GameObject(
-            "Score Text",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-        textObject.transform.SetParent(bgObject.transform, false);
-
-        var textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        coinScoreText = textObject.GetComponent<Text>();
-        coinScoreText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        coinScoreText.fontSize = 36;
-        coinScoreText.fontStyle = FontStyle.Bold;
-        coinScoreText.alignment = TextAnchor.MiddleCenter;
-        coinScoreText.color = Color.white;
-        coinScoreText.raycastTarget = false;
-    }
-
-    private void UpdateCoinScoreUI()
-    {
-        if (coinScoreText != null)
-        {
-            coinScoreText.text = $"Coins: {coinsCollected}/{totalCoins}";
-        }
+        Cursor.visible = !locked;
     }
 
     private void OnControllerColliderHit(ControllerColliderHit hit)
@@ -260,8 +252,7 @@ public class PlayerController : MonoBehaviour
         hasFailed = true;
         controller.enabled = false;
 
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        SetCursorLocked(false);
 
         // Create the canvas.
         var canvasObject = new GameObject(
