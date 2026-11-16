@@ -91,7 +91,7 @@ The current Git history shows the following contributions:
 | Member     | Contribution                                                      |
 | ---------- | ----------------------------------------------------------------- |
 | Devitvun85 | Scene setup, documentation, set coin doors and screenshots |
-| John       | Barrel-roll mechanic                                              |
+| Sorm Monyreaksmey      | Barrel-roll mechanic                                              |
 
 ## Submission Links
 
@@ -99,7 +99,7 @@ The current Git history shows the following contributions:
 |---|---|
 | Source repository | [Sky Meadow on GitHub](https://github.com/Devitvun85/Sky-Meadow-2026-10-18_01-37-41) |
 | Gameplay video | [YouTube Video](https://youtu.be/QaZv5KhQVns) |
-| Course submission form | [Microsoft Form](https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=7GGUHmJTKUOuRmH6PpHG0krixqZ-5JBLgDU3_E9cNpdUQ0ZCU0hTSzJQVlNUSkwyREZYRktDTE5SSy4u)|
+
 
 ## Credits
 
