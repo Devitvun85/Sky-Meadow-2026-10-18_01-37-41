@@ -433,11 +433,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   moveSpeed: 4
-<<<<<<< HEAD
-  turnSpeed: 360
-=======
   acceleration: 20
->>>>>>> 2d5b6bb2afec9501653055ce7addc40d89321c61
   jumpHeight: 1.5
   gravity: -40
   mouseSensitivity: 2

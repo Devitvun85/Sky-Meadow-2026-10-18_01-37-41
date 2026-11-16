@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Sky-Meadow-2026-10-18_01-37-41.slnx"
+    "dotnet.defaultSolution": "Sky Meadow.slnx"
 }

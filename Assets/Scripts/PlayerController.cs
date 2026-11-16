@@ -10,7 +10,11 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
-    [SerializeField] private float turnSpeed = 120f;
+
+    [Tooltip("How quickly movement speeds up and slows down.")]
+    [SerializeField, Min(0.1f)]
+    private float acceleration = 20f;
+
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -40f;
 
