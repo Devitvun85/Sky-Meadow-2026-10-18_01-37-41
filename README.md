@@ -111,7 +111,7 @@ The current Git history shows the following contributions:
 
 | Member     | Contribution                                                      |
 | ---------- | ----------------------------------------------------------------- |
-| Devitvun85 | Gameplay integration, scene setup, documentation, and screenshots |
+| Devitvun85 | Scene setup, documentation, set coin doors and screenshots |
 | John       | Barrel-roll mechanic                                              |
 
 If additional team members contributed, add their names and specific work to
