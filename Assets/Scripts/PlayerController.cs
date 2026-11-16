@@ -10,16 +10,27 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
+
+    [Tooltip("How quickly movement speeds up and slows down.")]
+    [SerializeField, Min(0.1f)]
+    private float acceleration = 20f;
+
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -40f;
 
     [Header("Mouse Look")]
     [SerializeField] private float mouseSensitivity = 2f;
-    [SerializeField, Range(1f, 89f)]
-    private float maxLookAngle = 85f;
 
-    [Header("Camera - drag the player's child Camera here")]
+    [SerializeField, Range(1f, 89f)]
+    private float maxLookAngle = 80f;
+
+    [Header("Camera")]
+    [Tooltip("Main Camera must be directly inside Player.")]
     [SerializeField] private Transform cameraTransform;
+
+    [Header("Visible Head - Optional")]
+    [Tooltip("Assign a real head bone, NOT Player or body-mesh.")]
+    [SerializeField] private Transform headBone;
 
     [Header("Pushing")]
     [SerializeField] private float pushPower = 2f;
@@ -30,21 +41,38 @@ public class PlayerController : MonoBehaviour
     private CharacterController controller;
     private MovingPlatformRL currentPlatform;
 
-    private Vector3 velocity;
+    private Vector3 horizontalVelocity;
+    private float verticalVelocity;
     private float cameraPitch;
 
-    private bool isQuitting;
+    private Quaternion headRestLocalRotation;
+
     private bool hasFailed;
+    private bool isQuitting;
 
     private void Start()
     {
         controller = GetComponent<CharacterController>();
 
+        // Automatically find a Camera inside Player.
         if (cameraTransform == null)
         {
+            Camera childCamera = GetComponentInChildren<Camera>(true);
+
+            if (childCamera != null)
+            {
+                cameraTransform = childCamera.transform;
+            }
+        }
+
+        // This controller uses a Camera directly parented to Player.
+        if (cameraTransform == null ||
+            cameraTransform.parent != transform ||
+            cameraTransform.GetComponent<Camera>() == null)
+        {
             Debug.LogError(
-                "PlayerController: Assign the player's child Camera " +
-                "to the Camera Transform field.",
+                "PlayerController: Put Main Camera directly under " +
+                "Player and assign it to Camera Transform.",
                 this
             );
 
@@ -54,6 +82,28 @@ public class PlayerController : MonoBehaviour
 
         cameraPitch = 0f;
         cameraTransform.localRotation = Quaternion.identity;
+        cameraTransform.localScale = Vector3.one;
+
+        // The optional head must belong to the player's skeleton.
+        if (headBone != null)
+        {
+            if (headBone == transform ||
+                headBone == cameraTransform ||
+                !headBone.IsChildOf(transform))
+            {
+                Debug.LogWarning(
+                    "Head Bone must be a head bone inside Player. " +
+                    "The optional head movement has been disabled.",
+                    this
+                );
+
+                headBone = null;
+            }
+            else
+            {
+                headRestLocalRotation = headBone.localRotation;
+            }
+        }
 
         SetCursorLocked(true);
     }
@@ -65,7 +115,6 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        // Show the failure screen when the player falls too far.
         if (transform.position.y < fallResetHeight)
         {
             ShowFailureScreen();
@@ -73,11 +122,11 @@ public class PlayerController : MonoBehaviour
         }
 
         // Escape releases the cursor.
-        // Clicking the Game view captures it again.
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             SetCursorLocked(false);
         }
+        // Click the Game view to capture the cursor again.
         else if (Cursor.lockState != CursorLockMode.Locked &&
                  Input.GetMouseButtonDown(0))
         {
@@ -92,47 +141,7 @@ public class PlayerController : MonoBehaviour
             HandleMouseLook();
         }
 
-        // Keyboard movement.
-        float horizontal = canControl
-            ? Input.GetAxisRaw("Horizontal")
-            : 0f;
-
-        float vertical = canControl
-            ? Input.GetAxisRaw("Vertical")
-            : 0f;
-
-        // Move relative to the direction the player is facing.
-        // A/D move sideways instead of turning the character.
-        Vector3 moveDirection =
-            transform.right * horizontal +
-            transform.forward * vertical;
-
-        // Prevent diagonal movement from being faster.
-        moveDirection = Vector3.ClampMagnitude(moveDirection, 1f);
-
-        // Keep the player grounded.
-        if (controller.isGrounded && velocity.y < 0f)
-        {
-            velocity.y = -2f;
-        }
-
-        // Jump.
-        if (canControl &&
-            controller.isGrounded &&
-            Input.GetKeyDown(KeyCode.Space))
-        {
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
-        }
-
-        // Gravity continues even when the cursor is released.
-        velocity.y += gravity * Time.deltaTime;
-
-        Vector3 finalMove =
-            moveDirection * moveSpeed +
-            Vector3.up * velocity.y;
-
-        controller.Move(finalMove * Time.deltaTime);
-
+        HandleMovement(canControl);
         UpdateMovingPlatformParent();
     }
 
@@ -144,12 +153,11 @@ public class PlayerController : MonoBehaviour
         float mouseY =
             Input.GetAxis("Mouse Y") * mouseSensitivity;
 
-        // Look left/right by rotating the player.
+        // Horizontal mouse movement turns Player and its visible body.
         transform.Rotate(0f, mouseX, 0f, Space.World);
 
-        // Look up/down by rotating only the camera.
+        // Vertical mouse movement tilts the Camera, not the whole body.
         cameraPitch -= mouseY;
-
         cameraPitch = Mathf.Clamp(
             cameraPitch,
             -maxLookAngle,
@@ -158,6 +166,88 @@ public class PlayerController : MonoBehaviour
 
         cameraTransform.localRotation =
             Quaternion.Euler(cameraPitch, 0f, 0f);
+    }
+
+    private void HandleMovement(bool canControl)
+    {
+        Vector2 input = Vector2.zero;
+
+        if (canControl)
+        {
+            input = new Vector2(
+                Input.GetAxisRaw("Horizontal"),
+                Input.GetAxisRaw("Vertical")
+            );
+        }
+
+        // Prevent faster diagonal movement.
+        input = Vector2.ClampMagnitude(input, 1f);
+
+        // Move along the ground in the direction Player is facing.
+        // Looking up does not make the player fly upwards.
+        Vector3 forward = Vector3.ProjectOnPlane(
+            transform.forward,
+            Vector3.up
+        ).normalized;
+
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+
+        Vector3 targetVelocity =
+            (forward * input.y + right * input.x) * moveSpeed;
+
+        // Smooth acceleration and stopping.
+        if (canControl)
+        {
+            horizontalVelocity = Vector3.MoveTowards(
+                horizontalVelocity,
+                targetVelocity,
+                acceleration * Time.deltaTime
+            );
+        }
+        else
+        {
+            horizontalVelocity = Vector3.zero;
+        }
+
+        if (controller.isGrounded && verticalVelocity < 0f)
+        {
+            verticalVelocity = -2f;
+        }
+
+        if (canControl &&
+            controller.isGrounded &&
+            Input.GetKeyDown(KeyCode.Space))
+        {
+            verticalVelocity =
+                Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
+
+        verticalVelocity += gravity * Time.deltaTime;
+
+        Vector3 movement =
+            horizontalVelocity + Vector3.up * verticalVelocity;
+
+        controller.Move(movement * Time.deltaTime);
+    }
+
+    private void LateUpdate()
+    {
+        if (headBone == null || hasFailed || isQuitting)
+        {
+            return;
+        }
+
+        // Player rotation already turns the head left/right.
+        // Add the up/down look to the visible head.
+        //
+        // Using Player's right axis avoids assuming that the
+        // imported head bone's own X-axis points sideways.
+        Quaternion restWorldRotation =
+            headBone.parent.rotation * headRestLocalRotation;
+
+        headBone.rotation =
+            Quaternion.AngleAxis(cameraPitch, transform.right) *
+            restWorldRotation;
     }
 
     private void SetCursorLocked(bool locked)
@@ -173,13 +263,12 @@ public class PlayerController : MonoBehaviour
     {
         Rigidbody body = hit.collider.attachedRigidbody;
 
-        // Only push non-kinematic rigidbodies.
         if (body == null || body.isKinematic)
         {
             return;
         }
 
-        // Do not push objects underneath the player.
+        // Do not push objects underneath the Player.
         if (hit.moveDirection.y < -0.3f)
         {
             return;
@@ -191,15 +280,14 @@ public class PlayerController : MonoBehaviour
             hit.moveDirection.z
         );
 
-        Vector3 pushVelocity =
-            pushDirection * moveSpeed * (pushPower * 0.5f);
+        float pushSpeed = moveSpeed * (pushPower * 0.5f);
 
-        // Support Unity 6 and earlier Unity versions.
-#if UNITY_6000_0_OR_NEWER
-        body.linearVelocity = pushVelocity;
-#else
-        body.velocity = pushVelocity;
-#endif
+        // Preserve vertical velocity so pushed objects still fall.
+        Vector3 bodyVelocity = body.linearVelocity;
+        bodyVelocity.x = pushDirection.x * pushSpeed;
+        bodyVelocity.z = pushDirection.z * pushSpeed;
+
+        body.linearVelocity = bodyVelocity;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -251,12 +339,12 @@ public class PlayerController : MonoBehaviour
 
         hasFailed = true;
         controller.enabled = false;
-
         SetCursorLocked(false);
 
-        // Create the canvas.
+        // Canvas.
         var canvasObject = new GameObject(
             "Failure Screen",
+            typeof(RectTransform),
             typeof(Canvas),
             typeof(CanvasScaler),
             typeof(GraphicRaycaster)
@@ -271,17 +359,14 @@ public class PlayerController : MonoBehaviour
             CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920f, 1080f);
 
-        // Create the background panel.
+        // Background.
         var panelObject = new GameObject(
             "Failure Panel",
             typeof(RectTransform),
             typeof(Image)
         );
 
-        panelObject.transform.SetParent(
-            canvasObject.transform,
-            false
-        );
+        panelObject.transform.SetParent(canvasObject.transform, false);
 
         var panelRect = panelObject.GetComponent<RectTransform>();
         panelRect.anchorMin = Vector2.zero;
@@ -292,35 +377,17 @@ public class PlayerController : MonoBehaviour
         panelObject.GetComponent<Image>().color =
             new Color(0f, 0f, 0f, 0.7f);
 
-        // Create the failure message.
-        var titleObject = new GameObject(
-            "Failure Message",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-
-        titleObject.transform.SetParent(
+        // Title.
+        CreateLabel(
             panelObject.transform,
-            false
+            "Failure Message",
+            "YOU FAILED",
+            64,
+            new Vector2(0f, 100f),
+            new Vector2(800f, 120f)
         );
 
-        var titleRect = titleObject.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.5f, 0.5f);
-        titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.anchoredPosition = new Vector2(0f, 100f);
-        titleRect.sizeDelta = new Vector2(800f, 120f);
-
-        var title = titleObject.GetComponent<Text>();
-        title.font =
-            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        title.text = "YOU FAILED";
-        title.fontSize = 64;
-        title.fontStyle = FontStyle.Bold;
-        title.alignment = TextAnchor.MiddleCenter;
-        title.color = Color.white;
-        title.raycastTarget = false;
-
-        // Create the restart button.
+        // Restart button.
         var buttonObject = new GameObject(
             "Play Again Button",
             typeof(RectTransform),
@@ -328,14 +395,9 @@ public class PlayerController : MonoBehaviour
             typeof(Button)
         );
 
-        buttonObject.transform.SetParent(
-            panelObject.transform,
-            false
-        );
+        buttonObject.transform.SetParent(panelObject.transform, false);
 
-        var buttonRect =
-            buttonObject.GetComponent<RectTransform>();
-
+        var buttonRect = buttonObject.GetComponent<RectTransform>();
         buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
         buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
         buttonRect.anchoredPosition = new Vector2(0f, -40f);
@@ -346,44 +408,18 @@ public class PlayerController : MonoBehaviour
 
         var button = buttonObject.GetComponent<Button>();
         button.targetGraphic = buttonImage;
+        button.onClick.AddListener(RestartLevel);
 
-        button.onClick.AddListener(() =>
-        {
-            SceneManager.LoadScene(
-                SceneManager.GetActiveScene().buildIndex
-            );
-        });
-
-        // Create the button label.
-        var buttonLabelObject = new GameObject(
-            "Label",
-            typeof(RectTransform),
-            typeof(Text)
-        );
-
-        buttonLabelObject.transform.SetParent(
+        CreateLabel(
             buttonObject.transform,
-            false
+            "Label",
+            "PLAY AGAIN",
+            36,
+            Vector2.zero,
+            new Vector2(320f, 90f)
         );
 
-        var labelRect =
-            buttonLabelObject.GetComponent<RectTransform>();
-
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
-
-        var label = buttonLabelObject.GetComponent<Text>();
-        label.font = title.font;
-        label.text = "PLAY AGAIN";
-        label.fontSize = 36;
-        label.fontStyle = FontStyle.Bold;
-        label.alignment = TextAnchor.MiddleCenter;
-        label.color = Color.white;
-        label.raycastTarget = false;
-
-        // Create an EventSystem if the scene does not have one.
+        // UI input.
         if (EventSystem.current == null)
         {
             var eventSystemObject = new GameObject(
@@ -396,6 +432,51 @@ public class PlayerController : MonoBehaviour
 
             inputModule.AssignDefaultActions();
         }
+    }
+
+    private void CreateLabel(
+        Transform parent,
+        string objectName,
+        string content,
+        int fontSize,
+        Vector2 position,
+        Vector2 size)
+    {
+        var labelObject = new GameObject(
+            objectName,
+            typeof(RectTransform),
+            typeof(Text)
+        );
+
+        labelObject.transform.SetParent(parent, false);
+
+        var rect = labelObject.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = position;
+        rect.sizeDelta = size;
+
+        var label = labelObject.GetComponent<Text>();
+        label.font =
+            Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        label.text = content;
+        label.fontSize = fontSize;
+        label.fontStyle = FontStyle.Bold;
+        label.alignment = TextAnchor.MiddleCenter;
+        label.color = Color.white;
+        label.raycastTarget = false;
+    }
+
+    private void RestartLevel()
+    {
+        SceneManager.LoadScene(
+            SceneManager.GetActiveScene().buildIndex
+        );
+    }
+
+    private void OnDisable()
+    {
+        SetCursorLocked(false);
     }
 
     private void OnApplicationQuit()
