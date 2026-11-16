@@ -47,6 +47,22 @@ When the level starts, the game is paused on the start screen.
 If the mouse is released with `Escape`, click the Game view before trying to
 move or look again.
 
+## Screenshots
+
+### Start Screen
+
+The start screen displays the game title, the basic controls, and the **START**
+button.
+
+![Sky Meadow start screen](Assets/Project/view/start.png)
+
+### Platform Course
+
+The main course contains floating platforms, moving platforms, doors, trees,
+and golden coins. The coin counter is shown at the top of the screen.
+
+![Sky Meadow platform course](Assets/Project/view/latform.png)
+
 ## How to Play
 
 ### Crossing platforms
