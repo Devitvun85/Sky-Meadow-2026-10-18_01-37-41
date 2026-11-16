@@ -10,7 +10,7 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 4f;
-    [SerializeField] private float turnSpeed = 120f;
+    [SerializeField] private float turnSpeed = 360f;
     [SerializeField] private float jumpHeight = 1.5f;
     [SerializeField] private float gravity = -40f;
 
