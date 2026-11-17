@@ -100,6 +100,12 @@ The current Git history shows the following contributions:
 | Source repository | [Sky Meadow on GitHub](https://github.com/Devitvun85/Sky-Meadow-2026-10-18_01-37-41) |
 | Gameplay video | [YouTube Video](https://youtu.be/QaZv5KhQVns) |
 
+## Download & Play
+
+1. **[Download Game Build (Windows x64 - v1.0.0)](https://github.com/<username>/<repo>/releases/download/v1.0.0/MyGame-Windows-v1.0.zip)**
+2. Extract the `.zip` archive to a folder.
+3. Run `MyGame.exe`.
+
 
 ## Credits
 
