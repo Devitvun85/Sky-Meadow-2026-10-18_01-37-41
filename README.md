@@ -92,6 +92,7 @@ The current Git history shows the following contributions:
 | ---------- | ----------------------------------------------------------------- |
 | Devitvun85 | Scene setup, documentation, set coin doors and screenshots |
 | Sorm Monyreaksmey      | Barrel-roll mechanic                                              |
+| Thai Chansothymon | Player movements, Player view, finish condition |
 
 ## Submission Links
 
